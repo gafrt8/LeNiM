@@ -34,7 +34,9 @@ public class View {
         klient.refToView(this); // Przesłanie klientowi referencji do siebie
         list = new ArrayList<>(); // Tworzy listę zalogowanych
 
-        youLa = new JLabel(" Jesteś zalogowany/na jako:  " + klient.getMe());
+/*(PAGE_START)*/
+        youLa = new JLabel();
+/*(PAGE_START)*/
 
 /*konwersacja (LINE_START)*/
         JPanel jPaLS = new JPanel();
@@ -124,12 +126,10 @@ public class View {
 
         frame = new JFrame("LeNiM");
         frame.setLocation(300, 200);
-        frame.setSize(450, 300);
+        frame.setSize(550, 300);
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Docelowo: ostrzeżenie!
         frame.add(jPaF);
 /*cała ramka*/
-
-        frame.setVisible(true);
     }
 
     /** Akcja przycisku "SEND" */
@@ -139,7 +139,8 @@ public class View {
 
             if(mCont.getText().equals("")) return; // Nie wysyłaj gdy brak tekstu
 
-            klient.sendMess(mCont.getText(), currentPerson.nick); // Prześlij Klientowi treść wiadomości
+            Message mess = new Message(mCont.getText(), klient.getMe(), currentPerson.nick);
+            klient.sendMess(mess); // Prześlij Klientowi treść wiadomości
 
             // Dopisz do konwersacji:
             if(currentPerson.conversation != null) { // Jak coś już jest, to po odstępach
@@ -212,7 +213,7 @@ public class View {
     /** Tworzy listę zalogowanych */
     void listCreate(String[] nL) {
 
-        if(nL == null) { // Jeśli pusta lista to nic nie rób
+        if(nL[0] == null) { // Jeśli pusta lista to nic nie rób
             System.out.println("View: Pusta lista");
             return;
         }
@@ -256,5 +257,10 @@ public class View {
                 }
             }
         }
+    }
+
+    void loggingDone() {
+        frame.setVisible(true);
+        youLa.setText("Jesteś zalogowany/na jako:   " + klient.getMe());
     }
 }

@@ -15,6 +15,7 @@ public class Klient {
     private Socket socket, socket2;
     private ObjectOutputStream oos;
     private ObjectInputStream ois, ois2;
+    private LoggingWindow loggingWindow;
 
     /** Konstruktor - Startuje wątek GOP'u, uzyskuje referencję do GOP'u, nawiązuje połączenie z serwerem */
     public Klient() throws IOException {
@@ -30,20 +31,19 @@ public class Klient {
         ois2 = new ObjectInputStream(socket2.getInputStream()); // strumień wejściowy listy zalogowanych
         (new Thread(new CheckMess())).start(); // Odpalenie wątku nasłuchu wiadomości
         (new Thread(new CheckList())).start(); // Odpalenie wątku nasłuchu listy zalogowanych
+
+        loggingWindow = new LoggingWindow(this); // Odpal okno logowania
     }
 
     /** Wysyła wiadomość do serwera (funkcja wywoływana przez View) */
-    void sendMess(String text, String toWho) {
-
-        Message mess = new Message(text, me, toWho);
-
+    void sendMess(Message mess) {
         try {
             oos.writeObject(mess);
             oos.flush();
         } catch (Exception e) {
             System.out.println("Klient DOWN sM: " + e);
         }
-        System.out.println("Klient: " + text + " do: " + toWho);
+        System.out.println("Klient: " + mess.text + " do: " + mess.toWho);
     }
 
     /** Zwraca login klienta */
@@ -63,7 +63,16 @@ public class Klient {
             while(true) {
                 try {
                     mess = (Message) ois.readObject();
-                    view.writeMess(mess);
+                    if(mess.logInfo == LetsGo.logOK)
+                        view.writeMess(mess);
+                    else if(mess.logInfo == LetsGo.logAccepted) {
+                        me = loggingWindow.getLogin();
+                        loggingWindow.loggingDone();
+                        view.loggingDone();
+                    }
+                    else if(mess.logInfo == LetsGo.logRejected) {
+                        loggingWindow.tryAgain();
+                    }
                 } catch (Exception e) {
                     System.out.println("Klient DOWN CM: " + e);
                 }
