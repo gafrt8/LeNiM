@@ -65,12 +65,12 @@ public class Klient {
                     mess = (Message) ois.readObject();
                     if(mess.logInfo == LetsGo.logOK)
                         view.writeMess(mess);
-                    else if(mess.logInfo == LetsGo.logAccepted) {
+                    else if(mess.logInfo == LetsGo.LOG_ACCEPTED) {
                         me = loggingWindow.getLogin();
                         loggingWindow.loggingDone();
                         view.loggingDone();
                     }
-                    else if(mess.logInfo == LetsGo.logRejected) {
+                    else if(mess.logInfo == LetsGo.LOG_REJECTED) {
                         loggingWindow.tryAgain();
                     }
                 } catch (Exception e) {

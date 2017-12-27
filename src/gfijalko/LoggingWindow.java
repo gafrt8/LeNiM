@@ -13,28 +13,44 @@ public class LoggingWindow {
     private JFrame logFrame;
     private JLabel infoLabel;
     private JTextField login;
+    /** Zlicza niepoprawne próby logowania */
+    private int i = 0;
 
     LoggingWindow(Klient klient) {
         this.klient = klient;
 
+        JLabel[] bar = new JLabel[3];
+        for(int i=0; i<3; i++) {
+            bar[i] = new JLabel();
+            bar[i].setMaximumSize(new Dimension(10, 10));
+        }
+
         infoLabel = new JLabel("Użyj od 3 do 10 znaków");
-        login = new JTextField();
-        login.setSize(100,20);
+        infoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+        login = new JTextField(10);
+        login.setMaximumSize(new Dimension(110,22));
+        login.setAlignmentX(Component.CENTER_ALIGNMENT);
         JButton logButton = new JButton("Zaloguj");
         logButton.addActionListener(new LogButton());
+        logButton.setAlignmentX(Component.CENTER_ALIGNMENT);
 
         JPanel logPanel = new JPanel();
         Color color = new Color(255, 230, 204);
         logPanel.setBackground(color);
+        logPanel.setLayout(new BoxLayout(logPanel, BoxLayout.Y_AXIS));
+        logPanel.add(bar[0]);
         logPanel.add(infoLabel);
+        logPanel.add(bar[1]);
         logPanel.add(login);
+        logPanel.add(bar[2]);
         logPanel.add(logButton);
 
         logFrame = new JFrame("LOGOWANIE");
         logFrame.setLocation(350, 220);
         logFrame.setSize(350, 150);
-        logFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Docelowo: ostrzeżenie!
+        logFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE); // Docelowo: ostrzeżenie!
         logFrame.add(logPanel);
+        logFrame.setResizable(false);
         logFrame.setVisible(true);
     }
 
@@ -45,7 +61,7 @@ public class LoggingWindow {
 
             if(login.getText().equals("")) return; // Nie wysyłaj gdy brak tekstu
 
-            Message mess = new Message(login.getText(), LetsGo.logIn);
+            Message mess = new Message(login.getText(), LetsGo.LOG_IN);
             klient.sendMess(mess); // Prześlij Klientowi treść wiadomości
         }
     }
@@ -63,6 +79,6 @@ public class LoggingWindow {
     /** Ponów logowanie */
     void tryAgain() {
         login.setText("");
-        infoLabel.setText("Wybierz inny login\nUżyj od 3 do 10 znaków");
+        infoLabel.setText("Wybierz inny login (" + ++i + ").  Użyj od 3 do 10 znaków");
     }
 }

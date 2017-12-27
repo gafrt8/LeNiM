@@ -27,10 +27,22 @@ public class Server implements Runnable {
 
     /** Przeszukuje listę zalogowanych i przekazuje wiadomość do adresata */
     private void passMess(Message mess) {
-        // 1. znajdź adresata na liście zalogowanych
-        // 2. przypisz jego oos
-//        oos.writeObject(m);
-//        oos.flush();
+        Iterator iterator = list.iterator();
+        GetAndPass gap;
+        ObjectOutputStream oos;
+
+        while(iterator.hasNext()) { // Znajdź adresata na liście zalogowanych
+            gap = (GetAndPass) iterator.next();
+            if(gap.nick.equals(mess.toWho)) { // Jeśli znaleziony
+                oos = gap.oos; // Przypisz bufor do przesyłania wiadomości
+                try {
+                    oos.writeObject(mess); // Prześlij wiadomość
+                    oos.flush();
+                } catch (Exception e) {
+                    System.out.println("Server DOWN pC: " + e);
+                }
+            }
+        }
         System.out.println("Server: " + mess.text + " from " + mess.fromWho + " to " + mess.toWho);
     }
 
@@ -50,6 +62,18 @@ public class Server implements Runnable {
                 System.out.println("Server DOWN pC: " + e);
             }
         }
+        System.out.println("Server: " + who.nick + " (zal -> true): " + who.in);
+    }
+
+    /** Przekazuje informację o poprawności logowania */
+    private void passInfo(Message feedback, ObjectOutputStream oos) {
+        try {
+            oos.writeObject(feedback); // Prześlij info
+            oos.flush();
+        } catch (Exception e) {
+            System.out.println("Server DOWN pI: " + e);
+        }
+        System.out.println("Server: " + "(OK -> 3): " + feedback.logInfo);
     }
 
     /** Tworzy / aktualizuje tablicę nick'ów zalogowanych klientów */
@@ -74,8 +98,6 @@ public class Server implements Runnable {
 
         ObjectInputStream ois;
         ObjectOutputStream oos, oos2;
-        GetAndPass gap;
-        String nick = "John"; // na razie stały
 
         public void run() {
             try {
@@ -90,21 +112,7 @@ public class Server implements Runnable {
                     oos = new ObjectOutputStream(socket.getOutputStream()); // Strumień wyjściowy wiadomości
                     oos2 = new ObjectOutputStream(socket2.getOutputStream()); // Strumień wyjściowy listy zalogowanych
 
-                    // start wątku
-                    // logowanie
-                    // przypisanie nicku
-                    (new Thread(gap = new GetAndPass(ois, oos, oos2, nick))).start(); // utworzenie i start wątku konkretnego klienta
-                    try { // Lista dla nowozalogowanego
-                        oos2.writeObject(nickList); // Przesyłamy aktualną listę zalogowanch
-                        oos2.flush();
-                    } catch (Exception e) {
-                        System.out.println("Server DOWN lista dla nowozalogowanego: " + e);
-                    }
-                    InOut newIn = new InOut(nick, true); // Nowy zalogowany
-                    passChange(newIn); // Przesłanie wszystkim zalogowanym zmiany w liście
-                    updateList(newIn); // Dodanie nowozalogowanego do listy
-                    list.add(gap); // Dodanie do listy klientów
-                    // koniec wątku
+                    (new Thread(new LogThread(ois, oos, oos2))).start(); // Start wątku logowania
 
                     if(numberOfLogged == LetsGo.limit) // Uśpij gdy limit klientów osiągnięty
                         try {
@@ -151,41 +159,53 @@ public class Server implements Runnable {
         }
     }
 
-//    public class LoggedList {
-//
-//        ListIterator iterator;
-//
-//        LoggedList() {
-//            iterator = list.listIterator();
-//        }
-//        public String getNextNick() {
-//            GetAndPass gap = (GetAndPass) iterator.next();
-//            return gap.nick;
-//        }
-//        public void goToFirst() {
-//            while(iterator.hasPrevious()) {
-//                iterator.previous();
-//            }
-//        }
-//    }
-}
+    /** Wątek - obsługuje logowanie, tworzy wątek klienta i dodaje do listy */
+    public class LogThread implements Runnable {
+        ObjectInputStream ois;
+        ObjectOutputStream oos, oos2;
+        GetAndPass gap;
+        String nick;
+        Message mess, feedback;
 
-// Z run():
-//        try {
-//            ServerSocket ss = new ServerSocket(4444); // Gniazdko nasłuchu
-//            socket = ss.accept();
-//            ObjectInputStream ois = new ObjectInputStream(socket.getInputStream()); // Strumień wejściowy
-////            ObjectOutputStream oos = new ObjectOutputStream(socket.getOutputStream()); // Strumień wyjściowy
-//            while (true) { // Pętla nieskończona
-//                mess = (Message) ois.readObject(); // Odczyt obiektu
-//                passMess(mess);
-////                ois.close(); // Zamknij strumień wejściowy
-////                oos.close(); // Zamknij strumień wyjściowy
-////                socket.close(); // Zamknij gniazdko
-//            }
-//        } catch (Exception e) {
-//            System.out.println("Server DOWN: " + e);
-//        }
+        LogThread(ObjectInputStream ois, ObjectOutputStream oos, ObjectOutputStream oos2) {
+            this.ois = ois;
+            this.oos = oos;
+            this.oos2 = oos2;
+        }
+
+        public void run() {
+            try { // Logowanie
+                while(true) { // Przechwyć nick (login)
+                    mess = (Message) ois.readObject(); // Odczyt obiektu wiadomości
+                    if(mess.text.length() >= 3 && mess.text.length() <= 15) { // Badanie długości nicku
+                        feedback = new Message(LetsGo.LOG_ACCEPTED);
+                        passInfo(feedback, oos); // Info o akceptacji nicku dla logującego się
+                        nick = mess.text; // Przypisanie nicku
+                        break;
+                    }
+                    else {
+                        feedback = new Message(LetsGo.LOG_REJECTED);
+                        passInfo(feedback, oos); // Info o odrzuceniu nicku dla logującego się
+                    }
+                }
+            } catch (Exception e) {
+                System.out.println("Server DOWN logowanie: " + e);
+            }
+
+            (new Thread(gap = new GetAndPass(ois, oos, oos2, nick))).start(); // utworzenie i start wątku konkretnego klienta
+            try { // Lista dla nowozalogowanego
+                oos2.writeObject(nickList); // Przesyłamy aktualną listę zalogowanch
+                oos2.flush();
+            } catch (Exception e) {
+                System.out.println("Server DOWN lista dla nowozalogowanego: " + e);
+            }
+            InOut newIn = new InOut(nick, true); // Nowy zalogowany
+            passChange(newIn); // Przesłanie wszystkim zalogowanym zmiany w liście
+            updateList(newIn); // Dodanie nowozalogowanego do listy
+            list.add(gap); // Dodanie do listy klientów
+        }
+    }
+}
 
 // Gdzie to dać:
 //                ois.close(); // Zamknij strumień wejściowy
