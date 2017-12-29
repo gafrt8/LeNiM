@@ -6,21 +6,21 @@ import java.awt.event.*;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-/** View - główne okno programu ( GOP ) */
+/** View - Główne Okno Programu ( GOP ) */
 
 public class View {
 
-    /** referencja do klienta */
+    /** Referencja do klienta */
     private Klient klient;
-    /** ramka GOP'u */
+    /** Ramka GOP'u */
     private JFrame frame;
     /** Panel przycików zalogowanych */
     private JPanel loggedPanel;
-    /** wyślij, opcje */
+    /** Przyciski: wyślij, opcje */
     private JButton send, options;
-    /** z kim piszesz, twój nick, conversationLabel */
-    private JLabel whoLa, youLa;
-    /** messageContent i conversation */
+    /** Napisy: aktualny stan (w sensie rozmówcy), twój nick */
+    private JLabel currentStateLabel, meLabel;
+    /** Pola tekstowe: messageContent i conversation */
     private JTextArea mCont, conv;
     /** Aktualny rozmówca */
     private Logged currentPerson;
@@ -35,7 +35,7 @@ public class View {
         list = new ArrayList<>(); // Tworzy listę zalogowanych
 
 /*(PAGE_START)*/
-        youLa = new JLabel();
+        meLabel = new JLabel();
 /*(PAGE_START)*/
 
 /*konwersacja (LINE_START)*/
@@ -77,7 +77,7 @@ public class View {
         zalLabel.setHorizontalAlignment(zalLabel.CENTER);
         jPaLE.add(zalLabel, BorderLayout.PAGE_START);
 
-        GridLayout gLyLE = new GridLayout(LetsGo.limit, 1);
+        GridLayout gLyLE = new GridLayout(LetsGo.LIMIT, 1);
         loggedPanel = new JPanel();
         loggedPanel.setLayout(gLyLE);
         jPaLE.add(loggedPanel, BorderLayout.CENTER);
@@ -99,9 +99,9 @@ public class View {
         options = new JButton("OPCJE");
         jPaPE.add(options);
 
-        whoLa = new JLabel("Brak rozmówcy");
-        whoLa.setHorizontalAlignment(whoLa.CENTER);
-        jPaPE.add(whoLa);
+        currentStateLabel = new JLabel("Brak rozmówcy");
+        currentStateLabel.setHorizontalAlignment(JLabel.CENTER);
+        jPaPE.add(currentStateLabel);
 
         send = new JButton("WYŚLIJ");
         send.setEnabled(false);
@@ -118,7 +118,7 @@ public class View {
         Color color = new Color(255, 230, 204);
         jPaF.setBackground(color);
 
-        jPaF.add(youLa, BorderLayout.PAGE_START);
+        jPaF.add(meLabel, BorderLayout.PAGE_START);
         jPaF.add(jPaLS, BorderLayout.LINE_START);
         jPaF.add(jSPm, BorderLayout.CENTER);
         jPaF.add(jPaLE, BorderLayout.LINE_END);
@@ -167,9 +167,10 @@ public class View {
         /** Zmienia aktualnego rozmówcę. Wypisuje konwersację ze Stringa 'conversation' itp. */
         public void actionPerformed(ActionEvent ae) {
             theGuy.setEnabled(false);
+            theGuy.setText(theGuy.nick);
             currentPerson = theGuy;
             conv.setText(currentPerson.conversation); // Wypisz konwersację
-            whoLa.setText(currentPerson.nick);
+            currentStateLabel.setText("Rozmówca:  " + currentPerson.nick);
             if(!send.isEnabled()) // Aktywuj przycisk 'Wyślij' jeśli nie jest aktywny
                 send.setEnabled(true);
         }
@@ -177,7 +178,7 @@ public class View {
 
     /** Wypisuje nową wiadomość na dole konwersacji lub dopisuje '(n)' obok nicku nadawcy */
     public void writeMess(Message mess) {
-        if(mess.fromWho.equals(currentPerson.nick)) { // Jeśli nowa wiadomość od aktualnego rozmówcy
+        if(currentPerson != null && mess.fromWho.equals(currentPerson.nick)) { // Jeśli nowa wiadomość od aktualnego rozmówcy
             if (currentPerson.conversation != null) { // Jak coś już jest, to po odstępach
                 if (!currentPerson.czyJa) // Jeśli ostatnio napisał rozmówca
                     currentPerson.conversation += "\n\n" + mess.text;
@@ -233,7 +234,7 @@ public class View {
             loggedPanel.add(newGuy); // Dodaj do panelu zalogowanych
             newGuy.addActionListener(new listButs(newGuy));
         }
-        whoLa.setText("Wybierz rozmówcę");
+        currentStateLabel.setText("Wybierz rozmówcę");
     }
 
     /** Aktualizuje listę zalogowanych */
@@ -243,8 +244,8 @@ public class View {
             list.add(newGuy); // Dodaj do listy zalogowanych
             loggedPanel.add(newGuy); // Dodaj do panelu zalogowanych
             newGuy.addActionListener(new listButs(newGuy));
-            if(!send.isEnabled()) { //////////////????????????
-                whoLa.setText("Wybierz rozmówcę");
+            if(!send.isEnabled()) { // Jeśli nie wybrano jeszcze rozmówcy -> napisz zachętę
+                currentStateLabel.setText(who.nick + " się zalogował!");
             }
         }
         else { // "who" się wylogował
@@ -261,6 +262,6 @@ public class View {
 
     void loggingDone() {
         frame.setVisible(true);
-        youLa.setText("Jesteś zalogowany/na jako:   " + klient.getMe());
+        meLabel.setText("Jesteś zalogowany/na jako:   " + klient.getMe());
     }
 }

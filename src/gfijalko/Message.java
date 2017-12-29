@@ -11,8 +11,10 @@ public class Message implements Serializable {
     String fromWho;
     /** Do kogo (nick) */
     String toWho;
-    /** 0 - zwykła wiadomość, 1 - zaloguj, 2 - wyloguj */
-    int logInfo = 0;
+    /** Do aktualizacji listy */
+    InOut listChanger;
+    /** Informacja jaki cel wiadomości */
+    int logInfo = LetsGo.LOG_OK; // Wartość domyślna '0'
 
     /** Konstruktor zwykłych wiadomości */
     Message(String t, String fW, String tW) {
@@ -28,7 +30,13 @@ public class Message implements Serializable {
     }
 
     /** Konstruktor wiadomości: feedback (od Servera) */
-    Message(int l) {
-        logInfo = l;
+    Message(int lI) {
+        logInfo = lI;
+    }
+
+    /** Konstruktor wiadomości: zmiana na liście zalogowanych */
+    Message(InOut lC, int lI) {
+        listChanger = lC;
+        logInfo = lI;
     }
 }

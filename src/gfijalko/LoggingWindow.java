@@ -3,19 +3,25 @@ package gfijalko;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.util.*;
 
 /** View - okno logowania ( OL ) */
 
 public class LoggingWindow {
 
+    /** Referencja do klienta */
     private Klient klient;
+    /** Ramka okna logowania */
     private JFrame logFrame;
+    /** Napis informacyjny */
     private JLabel infoLabel;
+    /** Pole tekstowe do wpisania nicku */
     private JTextField login;
     /** Zlicza niepoprawne próby logowania */
     private int i = 0;
+    /** Warunki poprawnego nicku */
+    private String conditions = "Użyj od 3 do 12 znaków";
 
+    /** Tworzy okno logowania */
     LoggingWindow(Klient klient) {
         this.klient = klient;
 
@@ -25,7 +31,7 @@ public class LoggingWindow {
             bar[i].setMaximumSize(new Dimension(10, 10));
         }
 
-        infoLabel = new JLabel("Użyj od 3 do 10 znaków");
+        infoLabel = new JLabel(conditions);
         infoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         login = new JTextField(10);
         login.setMaximumSize(new Dimension(110,22));
@@ -71,14 +77,14 @@ public class LoggingWindow {
         return login.getText();
     }
 
-    /** Zamyka logowanie */
+    /** Zamyka logowanie (przyjęto login) */
     void loggingDone() {
         logFrame.setVisible(false);
     }
 
-    /** Ponów logowanie */
+    /** Ponów logowanie (odrzucono login) */
     void tryAgain() {
         login.setText("");
-        infoLabel.setText("Wybierz inny login (" + ++i + ").  Użyj od 3 do 10 znaków");
+        infoLabel.setText("Wybierz inny login (" + ++i + ").  " + conditions);
     }
 }
