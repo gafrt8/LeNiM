@@ -8,25 +8,39 @@ import java.awt.event.*;
 
 public class LoggingWindow {
 
-    /** Referencja do klienta */
+    /**
+     * Referencja do klienta
+     */
     private Klient klient;
-    /** Ramka okna logowania */
+    /**
+     * Ramka okna logowania
+     */
     private JFrame logFrame;
-    /** Napis informacyjny */
+    /**
+     * Napis informacyjny
+     */
     private JLabel infoLabel;
-    /** Pole tekstowe do wpisania nicku */
+    /**
+     * Pole tekstowe do wpisania nicku
+     */
     private JTextField login;
-    /** Zlicza niepoprawne próby logowania */
+    /**
+     * Zlicza niepoprawne próby logowania
+     */
     private int i = 0;
-    /** Warunki poprawnego nicku */
+    /**
+     * Warunki poprawnego nicku
+     */
     private String conditions = "Użyj od 3 do 12 znaków";
 
-    /** Tworzy okno logowania */
+    /**
+     * Tworzy okno logowania
+     */
     LoggingWindow(Klient klient) {
         this.klient = klient;
 
         JLabel[] bar = new JLabel[3];
-        for(int i=0; i<3; i++) {
+        for (int i = 0; i < 3; i++) {
             bar[i] = new JLabel();
             bar[i].setMaximumSize(new Dimension(10, 10));
         }
@@ -34,7 +48,7 @@ public class LoggingWindow {
         infoLabel = new JLabel(conditions);
         infoLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
         login = new JTextField(10);
-        login.setMaximumSize(new Dimension(110,22));
+        login.setMaximumSize(new Dimension(110, 22));
         login.setAlignmentX(Component.CENTER_ALIGNMENT);
         JButton logButton = new JButton("Zaloguj");
         logButton.addActionListener(new LogButton());
@@ -54,37 +68,81 @@ public class LoggingWindow {
         logFrame = new JFrame("LOGOWANIE");
         logFrame.setLocation(350, 220);
         logFrame.setSize(350, 150);
-        logFrame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE); // Docelowo: ostrzeżenie!
+        logFrame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        logFrame.addWindowListener(new WindowAdapter() { // Ostrzeżenie przed zamknięciem
+            public void windowClosing(WindowEvent e) {
+                Object[] options = {"TAK", "NIE"};
+                int n = JOptionPane.showOptionDialog(logFrame,
+                        "Czy jesteś pewien, że chcesz zakończyć?",
+                        "WARNING",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE,
+                        null,     //do not use a custom Icon
+                        options,  //the titles of buttons
+                        options[0]); //default button title
+                if (n == JOptionPane.YES_OPTION) {
+                    logFrame.setVisible(false);
+                    logFrame.dispose();
+                    klient.finish();
+                    System.exit(0);
+                }
+            }
+        });
         logFrame.add(logPanel);
         logFrame.setResizable(false);
         logFrame.setVisible(true);
     }
 
-    /** Akcja przycisku "Zaloguj" */
+    /**
+     * Akcja przycisku "Zaloguj"
+     */
     private class LogButton implements ActionListener {
-        /** Przekazuje wiadomość klientowi i wypisuje ją na dole konwersacji */
+        /**
+         * Przekazuje wpisany nick (login) do Servera
+         */
         public void actionPerformed(ActionEvent ae) {
-
-            if(login.getText().equals("")) return; // Nie wysyłaj gdy brak tekstu
-
-            Message mess = new Message(login.getText(), LetsGo.LOG_IN);
-            klient.sendMess(mess); // Prześlij Klientowi treść wiadomości
+            if (login.getText().equals("")) return; // Nie wysyłaj gdy brak tekstu
+            klient.sendMess(new Message(login.getText()));
         }
     }
 
-    /** Zwraca login klienta */
+    /**
+     * Zwraca login klienta
+     */
     String getLogin() {
         return login.getText();
     }
 
-    /** Zamyka logowanie (przyjęto login) */
-    void loggingDone() {
-        logFrame.setVisible(false);
+    /**
+     * Zamyka logowanie (przyjęto login)
+     */
+    void setLoggingVisible(boolean b) {
+        logFrame.setVisible(b);
+        if (b) { // b==true oznacza ponowne logowanie
+            login.setText("");
+            infoLabel.setText(conditions);
+        }
     }
 
-    /** Ponów logowanie (odrzucono login) */
+    /**
+     * Ponów logowanie (odrzucono login)
+     */
     void tryAgain() {
         login.setText("");
         infoLabel.setText("Wybierz inny login (" + ++i + ").  " + conditions);
     }
 }
+
+
+//    @Override
+//    public void setWindowEnabled(boolean b) {
+//        logFrame.setEnabled(b);
+//    }
+//
+//    @Override
+//    public void finish() {
+//        logFrame.setVisible(false);
+//        logFrame.dispose();
+//        klient.finish();
+//        System.exit(0);
+//    }

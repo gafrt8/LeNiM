@@ -19,13 +19,17 @@ public class View {
     /** Przyciski: wyślij, opcje */
     private JButton send, options;
     /** Napisy: aktualny stan (w sensie rozmówcy), twój nick */
-    private JLabel currentStateLabel, meLabel;
+    private JLabel currentStateLabel, meLabel, loggedLabel;
     /** Pola tekstowe: messageContent i conversation */
-    private JTextArea mCont, conv;
+    private JTextArea messageContent, conv;
     /** Aktualny rozmówca */
     private Logged currentPerson;
     /** Lista zalogowanych klientów */
     private ArrayList <Logged> list;
+    /** true -> brak połączenia z serverem */
+    private boolean serverDown;
+    /** Licznik zalogowanych klientów */
+    private int numberOfLogged = 0;
 
     /** Konstruktor - buduje wygląd GOP'u */
     public View(Klient klient) {
@@ -45,7 +49,7 @@ public class View {
         jPaLS.setBackground(Color.lightGray);
 
         JLabel konLabel = new JLabel("**KONWERSACJA**");
-        konLabel.setHorizontalAlignment(konLabel.CENTER);
+        konLabel.setHorizontalAlignment(JLabel.CENTER);
         jPaLS.add(konLabel, BorderLayout.PAGE_START);
 
         conv = new JTextArea(0, 15);
@@ -59,12 +63,12 @@ public class View {
 /*konwersacja (LINE_START)*/
 
 /*Treść wiadomości (CENTER)*/
-        mCont = new JTextArea();
-        mCont.setMargin(new Insets(10,10,10,10));
-        mCont.setLineWrap(true); // Zawijaj tekst
-        mCont.setWrapStyleWord(true); // Zawijaj tak, żeby słów nie cięło
-        mCont.setBackground(Color.cyan);
-        JScrollPane jSPm = new JScrollPane(mCont); // Żeby scrollować się dało
+        messageContent = new JTextArea();
+        messageContent.setMargin(new Insets(10,10,10,10));
+        messageContent.setLineWrap(true); // Zawijaj tekst
+        messageContent.setWrapStyleWord(true); // Zawijaj tak, żeby słów nie cięło
+        messageContent.setBackground(Color.cyan);
+        JScrollPane jSPm = new JScrollPane(messageContent); // Żeby scrollować się dało
 /*Treść wiadomości (CENTER)*/
 
 /*lista klientów (LINE_END)*/
@@ -73,9 +77,9 @@ public class View {
         jPaLE.setLayout(bLyLE);
         jPaLE.setBackground(Color.lightGray);
 
-        JLabel zalLabel = new JLabel(" ZALOGOWANI: ");
-        zalLabel.setHorizontalAlignment(zalLabel.CENTER);
-        jPaLE.add(zalLabel, BorderLayout.PAGE_START);
+        loggedLabel = new JLabel();
+        loggedLabel.setHorizontalAlignment(JLabel.CENTER);
+        jPaLE.add(loggedLabel, BorderLayout.PAGE_START);
 
         GridLayout gLyLE = new GridLayout(LetsGo.LIMIT, 1);
         loggedPanel = new JPanel();
@@ -96,65 +100,108 @@ public class View {
         jPaPE.setLayout(gLyPE);
         jPaPE.setBackground(Color.lightGray);
 
-        options = new JButton("OPCJE");
+        options = new JButton("WYLOGUJ");
+        options.addActionListener(new logOutAction());
         jPaPE.add(options);
 
-        currentStateLabel = new JLabel("Brak rozmówcy");
+        currentStateLabel = new JLabel();
         currentStateLabel.setHorizontalAlignment(JLabel.CENTER);
         jPaPE.add(currentStateLabel);
 
         send = new JButton("WYŚLIJ");
         send.setEnabled(false);
-        send.addActionListener(new sendBut());
+        send.addActionListener(new sendAction());
         jPaPE.add(send);
 /*dolny kontener (PAGE_END)*/
 
 /*cała ramka*/
-        JPanel jPaF = new JPanel();
+        JPanel framePanel = new JPanel();
         BorderLayout bLyF = new BorderLayout(); // Układ GOP'u
         bLyF.setHgap(5);
         bLyF.setVgap(5);
-        jPaF.setLayout(bLyF);
+        framePanel.setLayout(bLyF);
         Color color = new Color(255, 230, 204);
-        jPaF.setBackground(color);
+        framePanel.setBackground(color);
 
-        jPaF.add(meLabel, BorderLayout.PAGE_START);
-        jPaF.add(jPaLS, BorderLayout.LINE_START);
-        jPaF.add(jSPm, BorderLayout.CENTER);
-        jPaF.add(jPaLE, BorderLayout.LINE_END);
-        jPaF.add(jPaPE, BorderLayout.PAGE_END);
+        framePanel.add(meLabel, BorderLayout.PAGE_START);
+        framePanel.add(jPaLS, BorderLayout.LINE_START);
+        framePanel.add(jSPm, BorderLayout.CENTER);
+        framePanel.add(jPaLE, BorderLayout.LINE_END);
+        framePanel.add(jPaPE, BorderLayout.PAGE_END);
 
         frame = new JFrame("LeNiM");
         frame.setLocation(300, 200);
         frame.setSize(550, 300);
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE); // Docelowo: ostrzeżenie!
-        frame.add(jPaF);
+        frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+        frame.addWindowListener(new WindowAdapter(){ // Ostrzeżenie przed zamknięciem
+            public void windowClosing(WindowEvent e) {
+                Object[] options = {"TAK", "NIE"};
+                int n = JOptionPane.showOptionDialog(frame,
+                        "Czy jesteś pewien, że chcesz zakończyć?",
+                        "WARNING",
+                        JOptionPane.YES_NO_OPTION,
+                        JOptionPane.WARNING_MESSAGE,
+                        null,     //do not use a custom Icon
+                        options,  //the titles of buttons
+                        options[0]); //default button title
+                if(n == JOptionPane.YES_OPTION) {
+                    frame.setVisible(false);
+                    frame.dispose();
+                    if(!serverDown) klient.finish();
+                    else System.exit(0);
+                }
+        }});
+        frame.add(framePanel);
 /*cała ramka*/
     }
 
-    /** Akcja przycisku "SEND" */
-    private class sendBut implements ActionListener {
+    /** Akcja przycisku "WYŚLIJ" */
+    private class sendAction implements ActionListener {
         /** Przekazuje wiadomość klientowi i wypisuje ją na dole konwersacji */
         public void actionPerformed(ActionEvent ae) {
 
-            if(mCont.getText().equals("")) return; // Nie wysyłaj gdy brak tekstu
+            if(messageContent.getText().equals("")) return; // Nie wysyłaj gdy brak tekstu
 
-            Message mess = new Message(mCont.getText(), klient.getMe(), currentPerson.nick);
+            Message mess = new Message(messageContent.getText(), klient.getMe(), currentPerson.nick);
             klient.sendMess(mess); // Prześlij Klientowi treść wiadomości
 
             // Dopisz do konwersacji:
             if(currentPerson.conversation != null) { // Jak coś już jest, to po odstępach
                 if (currentPerson.czyJa) // Jeśli ostatnio napisałem ja
-                    currentPerson.conversation += "\n\n" + mCont.getText();
+                    currentPerson.conversation += "\n" + messageContent.getText();
                 else
-                    currentPerson.conversation += "\n\n@ja\n" + mCont.getText();
+                    currentPerson.conversation += "\n\n@ja\n" + messageContent.getText();
             }
             else
-                currentPerson.conversation = "@ja\n" + mCont.getText();
+                currentPerson.conversation = "@ja\n" + messageContent.getText();
 
             conv.setText(currentPerson.conversation);
             currentPerson.setCzyJa(true);
-            mCont.setText(""); // Czyść messageContent
+            messageContent.setText(""); // Czyść messageContent
+        }
+    }
+
+    /** Akcja przycisku "WYLOGUJ" */
+    private class logOutAction implements ActionListener {
+        /** Przygotowuje do zalogowania ponownie */
+        public void actionPerformed(ActionEvent ae) {
+            Object[] options = {"TAK", "NIE"};
+            int n = JOptionPane.showOptionDialog(frame,
+                    "Czy jesteś pewien, że chcesz się wylogować?",
+                    "WARNING",
+                    JOptionPane.YES_NO_OPTION,
+                    JOptionPane.WARNING_MESSAGE,
+                    null,     //do not use a custom Icon
+                    options,  //the titles of buttons
+                    options[0]); //default button title
+            if (n == JOptionPane.YES_OPTION) {
+                frame.setVisible(false);
+                send.setEnabled(false);
+                conv.setText("");
+                list = new ArrayList<>(); // Utworzenie nowej listy zalogowanych
+                loggedPanel.removeAll(); // Usunięcie przycisków ludzi zalogowanych
+                klient.logOut();
+            }
         }
     }
 
@@ -168,11 +215,13 @@ public class View {
         public void actionPerformed(ActionEvent ae) {
             theGuy.setEnabled(false);
             theGuy.setText(theGuy.nick);
+            if(currentPerson != null)
+                currentPerson.setEnabled(true); // Aktywuj przycisk poprzedniego rozmówcy
             currentPerson = theGuy;
             conv.setText(currentPerson.conversation); // Wypisz konwersację
             currentStateLabel.setText("Rozmówca:  " + currentPerson.nick);
-            if(!send.isEnabled()) // Aktywuj przycisk 'Wyślij' jeśli nie jest aktywny
-                send.setEnabled(true);
+            if(!send.isEnabled() && !serverDown)
+                send.setEnabled(true); // Aktywuj przycisk 'Wyślij'
         }
     }
 
@@ -181,7 +230,7 @@ public class View {
         if(currentPerson != null && mess.fromWho.equals(currentPerson.nick)) { // Jeśli nowa wiadomość od aktualnego rozmówcy
             if (currentPerson.conversation != null) { // Jak coś już jest, to po odstępach
                 if (!currentPerson.czyJa) // Jeśli ostatnio napisał rozmówca
-                    currentPerson.conversation += "\n\n" + mess.text;
+                    currentPerson.conversation += "\n" + mess.text;
                 else
                     currentPerson.conversation += "\n\n@" + mess.fromWho + "\n" + mess.text;
             }
@@ -218,42 +267,51 @@ public class View {
             System.out.println("View: Pusta lista");
             return;
         }
-
-        Logged newGuy;
         System.out.println("View: " + Arrays.toString(nL));
 
-        try {
-            TimeUnit.MILLISECONDS.sleep(900); // Opóźnienie w celu eliminacji wyścigów
-        } catch(InterruptedException ie) {
-            System.out.println(ie);
-        }
-
-        for(int i=0; nL[i] != null; i++) {
-            newGuy = new Logged(nL[i]);
+        for(numberOfLogged = 0; nL[numberOfLogged] != null; numberOfLogged++) {
+            Logged newGuy = new Logged(nL[numberOfLogged]);
+            newGuy.addActionListener(new listButs(newGuy));
             list.add(newGuy); // Dodaj do listy zalogowanych
             loggedPanel.add(newGuy); // Dodaj do panelu zalogowanych
-            newGuy.addActionListener(new listButs(newGuy));
         }
         currentStateLabel.setText("Wybierz rozmówcę");
+        loggedLabel.setText(" ZALOGOWANI(" + numberOfLogged + ") ");
     }
 
     /** Aktualizuje listę zalogowanych */
-    void listUpdate(InOut who) {
-        if(who.in) { // Jeśli nowy zalogowany
-            Logged newGuy = new Logged(who.nick);
+    void listUpdate(InOut listChanger) {
+        System.out.println("listUpdate: " + listChanger.nick);
+        if(listChanger.in) { // Jeśli nowy zalogowany
+            loggedLabel.setText(" ZALOGOWANI(" + ++numberOfLogged + ") ");
+            Logged newGuy = new Logged(listChanger.nick);
+            newGuy.addActionListener(new listButs(newGuy));
             list.add(newGuy); // Dodaj do listy zalogowanych
             loggedPanel.add(newGuy); // Dodaj do panelu zalogowanych
-            newGuy.addActionListener(new listButs(newGuy));
             if(!send.isEnabled()) { // Jeśli nie wybrano jeszcze rozmówcy -> napisz zachętę
-                currentStateLabel.setText(who.nick + " się zalogował!");
+                currentStateLabel.setText(listChanger.nick + " się zalogował!");
             }
+            else // Jeśli już wybrano rozmówcę, potrzeba odświeżenia
+                refresh();
         }
-        else { // "who" się wylogował
+        else { // "listChanger" się wylogował
+            loggedLabel.setText(" ZALOGOWANI(" + --numberOfLogged + ") ");
             Iterator iterator = list.iterator();
             while(iterator.hasNext()) {
                 Logged byeGuy = (Logged) iterator.next();
-                if(byeGuy.nick.equals(who.nick)) {
+                if(byeGuy.nick.equals(listChanger.nick)) {
                     iterator.remove();
+                    loggedPanel.remove(byeGuy);
+                    if(currentPerson == byeGuy) {
+                        currentPerson = null;
+                        send.setEnabled(false);
+                        conv.setText("");
+                        if(numberOfLogged > 0)
+                            currentStateLabel.setText("Wybierz rozmówcę");
+                        else
+                            currentStateLabel.setText("Brak rozmówcy");
+                    }
+                    refresh();
                     break;
                 }
             }
@@ -263,5 +321,34 @@ public class View {
     void loggingDone() {
         frame.setVisible(true);
         meLabel.setText("Jesteś zalogowany/na jako:   " + klient.getMe());
+        currentStateLabel.setText("Brak rozmówcy");
+    }
+
+    void serverDown() {
+        serverDown = true;
+        meLabel.setText("UTRACONO POŁĄCZENIE Z SERVEREM");
+        loggedLabel.setText(" Odłączeni(" + numberOfLogged + ") ");
+        send.setEnabled(false);
+        options.setEnabled(false);
+    }
+
+    private void refresh() {
+        frame.setVisible(false);
+        frame.setVisible(true);
     }
 }
+
+
+//    @Override
+//    public void setWindowEnabled(boolean b) {
+//        messageContent.setEnabled(b);
+//        send.setEnabled(b);
+//    }
+//
+//    @Override
+//    public void finish() {
+//        frame.setVisible(false);
+//        frame.dispose();
+//        klient.finish();
+//        System.exit(0);
+//    }

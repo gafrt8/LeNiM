@@ -3,9 +3,11 @@ package gfijalko;
 import javax.swing.*;
 
 public class Logged extends JButton {
-    String conversation = null;
+    String conversation = null; // Potrzebne??
     String nick;
-    /** false - od rozmówcy, true - ode mnie (ostatnia wiadomość) */
+    /**
+     * false - od rozmówcy, true - ode mnie (ostatnia wiadomość)
+     */
     boolean czyJa;
 
     Logged(String nick) {
@@ -16,10 +18,10 @@ public class Logged extends JButton {
     public void setCzyJa(boolean czyJa) {
         this.czyJa = czyJa;
     }
+}
 
-    //    @Override
+//    @Override
 //    public void setText(String text) {
 //        super.setText(text);
 //        nick = text;
 //    }
-}

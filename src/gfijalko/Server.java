@@ -9,20 +9,29 @@ import java.util.*;
 
 public class Server implements Runnable {
 
-    private Socket socket, socket2;
+    private Socket socket;
+    private ServerSocket serverSocket;
+    /** Wykonawca wątku szukania nowych klientów */
+//    private ExecutorService exec;
+    private Thread listenToKlients;
     /** Lista zalogowanych klientów */
     private ArrayList <GetAndPass> list;
     /** Lista nicków zalogowanych klientów */
     private String[] nickList;
     /** Licznik zalogowanych klientów */
     private int numberOfLogged = 0;
+    /** Okno servera */
+    private ServerWindow serverWindow;
 
     /** Odpala wątek szukania nowych klientów i tworzy listę gap'ów */
     public void run() {
         list = new ArrayList<>(); // Tworzy listę wątków klientów (gap'ów)
         nickList = new String[LetsGo.LIMIT]; // Tworzy listę nicków klientów. Ilość miejsc ograniczona
-        Thread listen = new Thread(new KliSearch());
-        listen.start();
+//        exec = Executors.newSingleThreadExecutor();
+//        exec.execute(new KliSearch());
+        listenToKlients = new Thread(new KliSearch());
+        listenToKlients.start();
+        serverWindow = new ServerWindow(this); // Otwarcie okna servera
     }
 
     /** Przeszukuje listę zalogowanych i przekazuje wiadomość do adresata */
@@ -43,7 +52,7 @@ public class Server implements Runnable {
                 }
             }
         }
-        System.out.println("Server: " + mess.text + " from " + mess.fromWho + " to " + mess.toWho);
+        serverWindow.setStatements("Server: " + mess.text + " from " + mess.fromWho + " to " + mess.toWho);
     }
 
     /** Przekazuje wszystkim zalogowanym nowo zalogowanego/wylogowanego */
@@ -62,7 +71,7 @@ public class Server implements Runnable {
                 System.out.println("Server DOWN pC: " + e);
             }
         }
-        System.out.println("Server: " + listChanger.nick + " (zal -> true): " + listChanger.in);
+        serverWindow.setStatements("Server: " + listChanger.nick + " (zal -> true): " + listChanger.in);
     }
 
     /** Przekazuje informację o poprawności logowania */
@@ -73,7 +82,7 @@ public class Server implements Runnable {
         } catch (Exception e) {
             System.out.println("Server DOWN pI: " + e);
         }
-        System.out.println("Server: " + "(OK -> 3): " + feedback.logInfo);
+        serverWindow.setStatements("Server: " + "(OK -> 3): " + feedback.info);
     }
 
     /** Tworzy / aktualizuje tablicę nick'ów zalogowanych klientów */
@@ -91,6 +100,7 @@ public class Server implements Runnable {
             }
             numberOfLogged--;
         }
+        serverWindow.Update(nickList);
     }
 
     /** Wątek - Nasłuchuje nowych klientów i tworzy ich wątki */
@@ -101,25 +111,19 @@ public class Server implements Runnable {
 
         public void run() {
             try {
-                ServerSocket ss = new ServerSocket(LetsGo.PORT); // Gniazdko nasłuchu nowych klientów
-//                ServerSocket ss2 = new ServerSocket(LetsGo.port2); // Gniazdko nasłuchu dla przekazywania listy
-                while(true) { // nieskończone nasłuchiwanie (na razie - trzeba wprowadzić ograniczenie ilości klientów)
-                    socket = ss.accept();
+                serverSocket = new ServerSocket(LetsGo.PORT); // Gniazdko nasłuchu nowych klientów
+                while(true) { // nieskończone nasłuchiwanie nowych klientów (aż osiągnięty limit)
+                    socket = serverSocket.accept();
                     System.out.println("Akceptuję połączenie z: " + socket.getInetAddress());
-//                    socket2 = ss2.accept();
-//                    System.out.println("Akceptuję socket2");
+//                    serverWindow.setStatements("Akceptuję połączenie z: " + socket.getInetAddress());
                     ois = new ObjectInputStream(socket.getInputStream()); // Strumień wejściowy wiadomości
                     oos = new ObjectOutputStream(socket.getOutputStream()); // Strumień wyjściowy wiadomości
-//                    oos2 = new ObjectOutputStream(socket2.getOutputStream()); // Strumień wyjściowy listy zalogowanych
 
-                    (new Thread(new LogThread(ois, oos))).start(); // Start wątku logowania
+//                    (new Thread(new LogThread(ois, oos))).start(); // Start wątku logowania
+                    GetAndPass gap = new GetAndPass(ois, oos);
+                    new Thread(new LogThread(new Thread(gap), gap));
 
-                    if(numberOfLogged == LetsGo.LIMIT) // Uśpij gdy limit klientów osiągnięty
-                        try {
-                            wait();
-                        } catch(Exception e) {
-                            System.out.println(e);
-                        }
+                    limitChecker(); // Sprawdzenie czy limit klientów osiągnięty
                     System.out.println("Doszło aż tu");
                 }
             } catch (IOException ie) {
@@ -142,42 +146,108 @@ public class Server implements Runnable {
         GetAndPass(ObjectInputStream ois, ObjectOutputStream oos, String nick) {
             this.ois = ois;
             this.oos = oos;
-//            this.oos2 = oos2;
             this.nick = nick;
+        }
+        GetAndPass(ObjectInputStream ois, ObjectOutputStream oos) {
+            this.ois = ois;
+            this.oos = oos;
         }
         /** Odbiera wiadomość i wywołuje przekazywacz */
         public void run() {
             System.out.println("GetAndPass created");
             try {
                 while(true) { // Pętla nieskończona odbierania wiadomości
+
                     mess = (Message) ois.readObject(); // Odczyt obiektu wiadomości
-                    passMess(mess); // Przekazanie wiadomości do adresata
+
+                    if(mess.info == LetsGo.TEXT_MESSAGE)
+                        passMess(mess); // Przekazanie wiadomości do adresata
+
+                    else if(mess.info == LetsGo.LOG_OUT) {
+                        InOut outGuy = new InOut(nick, false);
+
+                        Iterator iterator = list.iterator();
+                        GetAndPass gap;
+                        while(iterator.hasNext()) { // Znajdź outGuy'a na liście zalogowanych
+                            gap = (GetAndPass) iterator.next();
+                            if(nick.equals(gap.nick)) // Jeśli znaleziony
+                                iterator.remove(); // Usunięcie z listy zalogowanych
+                        }
+                        (new Thread(new LogThread(this))).start(); // Start wątku logowania
+                        passChange(outGuy); // Przesłanie informacji o wylogowaniu do zalogowanych
+                        updateList(outGuy); // Usunięcie z listy nick'ów
+                        return;
+                    }
+                    else if (mess.info == LetsGo.RIP) {
+                        InOut ripGuy = new InOut(nick, false);
+
+                        Iterator iterator = list.iterator();
+                        GetAndPass gap;
+                        while(iterator.hasNext()) { // Znajdź outGuy'a na liście zalogowanych
+                            gap = (GetAndPass) iterator.next();
+                            if(gap.nick.equals(nick)) { // Jeśli znaleziony
+                                iterator.remove(); // Usunięcie z listy zalogowanych
+                                try {
+                                    oos.writeObject(mess); // Odeślij wiadomość (potwierdzenie)
+                                    oos.flush();
+                                    ois.close(); // Zamknij strumień wejściowy
+                                    oos.close(); // Zamknij strumień wyjściowy
+                                } catch (Exception e) {
+                                    System.out.println("Server DOWN pC: " + e);
+                                }
+                            }
+                        }
+                        passChange(ripGuy); // Przesłanie informacji o wylogowaniu do zalogowanych
+                        updateList(ripGuy); // Usunięcie z listy nick'ów
+                        return;
+                    }
+                    else if(mess.info == LetsGo.SERVER_DOWN) {
+                        ois.close();
+                        oos.close();
+                        numberOfLogged--;
+                        finishOK();
+                        return;
+                    }
+
                 }
             } catch (Exception e) {
-                System.out.println("Server DOWN GAP: " + e);
+                System.out.println("Server DOWN GAP " + nick + ": " + e);
             }
+        }
+
+        void setNick(String nick) {
+            this.nick = nick;
         }
     }
 
     /** Wątek - obsługuje logowanie, tworzy wątek klienta i dodaje go do listy */
     public class LogThread implements Runnable {
+        Thread thread;
+        GetAndPass gap;
         ObjectInputStream ois;
         ObjectOutputStream oos;
-        GetAndPass gap;
         String nick;
         Message mess, feedback;
-        boolean isGood;
+        boolean isGood; // Domyśle: false
 
         LogThread(ObjectInputStream ois, ObjectOutputStream oos) {
             this.ois = ois;
             this.oos = oos;
-//            this.oos2 = oos2;
+        }
+
+        LogThread(Thread thread, GetAndPass gap) {
+            this.thread = thread;
+            this.gap = gap;
+        }
+
+        LogThread(GetAndPass gap) {
+            this.gap = gap;
         }
 
         public void run() {
             try { // Logowanie
                 while(true) { // Przechwyć nick (login)
-                    mess = (Message) ois.readObject(); // Odczyt obiektu wiadomości
+                    mess = (Message) gap.ois.readObject(); // Odczyt obiektu wiadomości
 
                     if(mess.text.length() >= 3 && mess.text.length() <= 12) { // Badanie długości nicku
                         isGood = true; // Wstępne założenie poprawności
@@ -188,28 +258,28 @@ public class Server implements Runnable {
                             }
                         }
                     }
-//                    else
-//                        isGood = false;
 
                     if(isGood) {
                         feedback = new Message(LetsGo.LOG_ACCEPTED);
-                        passInfo(feedback, oos); // Info o akceptacji nicku dla logującego się
+                        passInfo(feedback, gap.oos); // Info o akceptacji nicku dla logującego się
                         nick = mess.text; // Przypisanie nicku
                         break;
                     }
                     else {
                         feedback = new Message(LetsGo.LOG_REJECTED);
-                        passInfo(feedback, oos); // Info o odrzuceniu nicku dla logującego się
+                        passInfo(feedback, gap.oos); // Info o odrzuceniu nicku dla logującego się
                     }
                 }
             } catch (Exception e) {
                 System.out.println("Server DOWN logowanie: " + e);
             }
 
-            (new Thread(gap = new GetAndPass(ois, oos, nick))).start(); // utworzenie i start wątku konkretnego klienta
+//            (new Thread(gap = new GetAndPass(ois, oos, nick))).start(); // utworzenie i start wątku konkretnego klienta
+            gap.setNick(nick);
+            thread.start();
             try { // Lista dla nowozalogowanego
-                oos.writeObject(nickList); // Przesyłamy aktualną listę zalogowanch
-                oos.flush();
+                gap.oos.writeObject(nickList); // Przesyłamy aktualną listę zalogowanch
+                gap.oos.flush();
             } catch (Exception e) {
                 System.out.println("Server DOWN lista dla nowozalogowanego: " + e);
             }
@@ -218,6 +288,55 @@ public class Server implements Runnable {
             updateList(newIn); // Dodanie nowozalogowanego do listy nicków
             list.add(gap); // Dodanie do listy klientów
         }
+    }
+
+    /** Kończy pracę servera */
+    synchronized void finish() {
+//        exec.shutdownNow(); // Przestań wyszukiwać nowych klientów
+        listenToKlients.stop(); // Przestań wyszukiwać nowych klientów
+        Iterator iterator = list.iterator();
+        GetAndPass gap;
+        Message mess = new Message(LetsGo.SERVER_DOWN);
+        while(iterator.hasNext()) { // Do każdego zalogowanego
+            gap = (GetAndPass) iterator.next();
+            try {
+                gap.oos.writeObject(mess); // Info że server padł
+                gap.oos.flush();
+            } catch (Exception e) {
+                System.out.println("Server DOWN finish1: " + e);
+            }
+        }
+        try {
+            wait();
+            System.out.println("Zamykam sockety");
+            socket.close();
+            serverSocket.close();
+        } catch (Exception e) {
+            System.out.println("Server DOWN finish2: " + e);
+        }
+        System.exit(0);
+    }
+
+    private synchronized void finishOK() {
+        System.out.println("finishOK used");
+        if(numberOfLogged == 0)
+            notify();
+    }
+
+    private synchronized void limitChecker() {
+        if(numberOfLogged == LetsGo.LIMIT-1) {
+            System.out.println("Limit klientów osiągnięty");
+            try {
+                wait();
+            } catch (InterruptedException ie) {
+                System.out.println(ie);
+            }
+        }
+    }
+
+    private synchronized void lessThanLimit() {
+        if(numberOfLogged == LetsGo.LIMIT-2)
+            notify();
     }
 }
 

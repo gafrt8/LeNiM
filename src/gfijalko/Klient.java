@@ -10,27 +10,26 @@ public class Klient {
 
     /** Referencja do GOP */
     private View view;
-    /** na razie stały login */
-    private String me = "ToYa";
+    /** Login */
+    private String me;
     private Socket socket;
     private ObjectOutputStream oos;
     private ObjectInputStream ois;
     private LoggingWindow loggingWindow;
 
+    public static void main(String[] args) { // Do niezależnego odpalania klientów
+        Thread klient = new Thread(new WontKli());
+        klient.start();
+    }
+
     /** Konstruktor - Startuje wątek GOP'u, uzyskuje referencję do GOP'u, nawiązuje połączenie z serwerem */
     public Klient() throws IOException {
-        WontView wV;
-        Thread wontView = new Thread(wV = new WontView(this)); // Utwórz wątek GOP'u
-        wontView.start(); // Startuj wątek GOP'u
-//        view = wV.getRefToView(); // Przypisz referencję do GOP'u
+        (new Thread(new WontView(this))).start(); // Startuj wątek GOP'u
 
         socket = new Socket(LetsGo.HOST, LetsGo.PORT);
-//        socket2 = new Socket(LetsGo.HOST, LetsGo.port2);
         oos = new ObjectOutputStream(socket.getOutputStream()); // strumień wyjściowy wiadomości
         ois = new ObjectInputStream(socket.getInputStream()); // strumień wejściowy wiadomości
-//        ois2 = new ObjectInputStream(socket2.getInputStream()); // strumień wejściowy listy zalogowanych
         (new Thread(new CheckMess())).start(); // Odpalenie wątku nasłuchu wiadomości
-//        (new Thread(new CheckList())).start(); // Odpalenie wątku nasłuchu listy zalogowanych
 
         loggingWindow = new LoggingWindow(this); // Odpal okno logowania
     }
@@ -46,27 +45,17 @@ public class Klient {
         System.out.println("Klient: " + mess.text + " do: " + mess.toWho);
     }
 
-    /** Zwraca login klienta */
-    String getMe() {
-        return me;
-    }
-
-    /** Dostaje referencję do GOP'u */
-    void refToView(View ref) {
-        view = ref;
-    }
-
-    /** Wątek - Sprawdza czy jest nowa wiadomość i jak jest to wypisuje */
+    /** Wątek - Sprawdza czy jest nowa wiadomość i jak jest to odpowiednio reaguje */
     private class CheckMess implements Runnable {
         Message mess;
         String[] nickList;
         public void run() {
-            while(true) {
-                try {
+            try {
+                while(true) {
                     mess = (Message) ois.readObject();
-                    if(mess.logInfo == LetsGo.LOG_OK)
+                    if(mess.info == LetsGo.TEXT_MESSAGE) // Zwykła wiadomość od innego użytkownika
                         view.writeMess(mess);
-                    else if(mess.logInfo == LetsGo.LOG_ACCEPTED) {
+                    else if(mess.info == LetsGo.LOG_ACCEPTED) {
                         me = loggingWindow.getLogin(); // Przypisanie zaakceptowanego nicku
 
                         try { // Odbiór pełnej aktualnej listy (tylko raz, po zalogowaniu)
@@ -77,21 +66,67 @@ public class Klient {
                             System.out.println("Klient DOWN CM1: " + e);
                         }
 
-                        loggingWindow.loggingDone(); // Zamknij okno logowania
+                        loggingWindow.setLoggingVisible(false); // Zamknij okno logowania
                         view.loggingDone(); // Otwórz główne okno programu
                     }
-                    else if(mess.logInfo == LetsGo.LOG_REJECTED) {
+                    else if(mess.info == LetsGo.LOG_REJECTED) {
                         loggingWindow.tryAgain();
                     }
-                    else if(mess.logInfo == LetsGo.LIST_UPDATE) {
+                    else if(mess.info == LetsGo.LIST_UPDATE) {
                         view.listUpdate(mess.listChanger); // info do View
                     }
-                } catch (Exception e) {
-                    System.out.println("Klient DOWN CM2: " + e);
+                    else if(mess.info == LetsGo.RIP) { // Można zakończyć
+                        try {
+                            ois.close(); // Zamknij strumień wejściowy
+                            oos.close(); // Zamknij strumień wyjściowy
+                            socket.close(); // Zamknij gniazdko
+                        } catch(IOException e) {
+                            System.out.println("Klient DOWN CM2: " + e);
+                        }
+                        System.exit(0);
+                        return;
+                    }
+                    else if(mess.info == LetsGo.SERVER_DOWN) {
+                        view.serverDown();
+                        sendMess(mess);
+                        try {
+                            ois.close(); // Zamknij strumień wejściowy
+                            oos.close(); // Zamknij strumień wyjściowy
+                            socket.close(); // Zamknij gniazdko
+                        } catch(IOException e) {
+                            System.out.println("Klient DOWN CM3: " + e);
+                        }
+                        return;
+                    }
                 }
+            } catch (Exception e) {
+                System.out.println("Klient DOWN CM4: " + e);
             }
         }
     }
+
+    /** Zwraca login klienta */
+    String getMe() {
+        return me;
+    }
+
+    /** Dostaje referencję do GOP'u */
+    void refToView(View ref) {
+        view = ref;
+    }
+
+    /** Wysyła prośbę do servera o wylogowanie. Ponowne logowanie */
+    void logOut() {
+        sendMess(new Message(LetsGo.LOG_OUT));
+        loggingWindow.setLoggingVisible(true); // Otwórz okno logowania
+    }
+
+    /** Wysyła informację do servera o zakończeniu pracy */
+    void finish() {
+        sendMess(new Message(LetsGo.RIP));
+    }
+}
+
 
 //    /** Wątek - Odbiera listę zalogowanych i sprawdza czy zaszła zmiana w liście zalogowanych i aktualizuje */
 //    private class CheckList implements Runnable {
@@ -115,4 +150,3 @@ public class Klient {
 //            }
 //        }
 //    }
-}

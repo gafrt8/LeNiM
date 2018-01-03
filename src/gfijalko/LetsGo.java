@@ -6,28 +6,25 @@ public class LetsGo {
 
     public static String HOST = "localhost";
     public static int PORT = 4444;
-    public static int port2 = 5555;
     /** Ograniczenie ilości klientów */
     public static int LIMIT = 10;
-    /** Zwykła wiadomość */
-    public static int LOG_OK = 0;
-    /** Zaloguj */
-    public static int LOG_IN = 1;
-    /** Wyloguj */
-    public static int LOG_OUT = 2;
+    /** Zwykła wiadomość między użytkownikami */
+    public static int TEXT_MESSAGE = 0;
+    /** Prośba Klienta o wylogowanie */
+    public static int LOG_OUT = 1;
     /** Zaakceptowano nick */
-    public static int LOG_ACCEPTED = 3;
+    public static int LOG_ACCEPTED = 2;
     /** Odrzucono nick */
-    public static int LOG_REJECTED = 4;
+    public static int LOG_REJECTED = 3;
     /** Aktualizacja listy zalogowanych */
-    public static int LIST_UPDATE = 5;
+    public static int LIST_UPDATE = 4;
+    /** Klient: zakończono, Server: potwierdzam zakończenie */
+    public static int RIP = 5;
+    /** Server: zakończono, Klienci: potwierdzam zakończenie */
+    public static int SERVER_DOWN = 6;
 
-    public static void main(String[] args){
+    public static void main(String[] args) {
         Thread server = new Thread(new Server());
         server.start();
-        Thread klient = new Thread(new WontKli());
-        klient.start();
-        Thread klient2 = new Thread(new WontKli());
-        klient2.start();
     }
 }
